@@ -1,0 +1,976 @@
+
+import tkinter as tk
+from tkinter import ttk, messagebox
+from typing import List, Dict
+import webbrowser
+
+# ==========================================
+# 1. OOP, DATA MODELS
+# ==========================================
+
+class Question:
+    """Stores question details along with target class level and options."""
+    def __init__(self, q_id: int, target_class: str, subject: str, topic: str, text: str, options: List[str], correct_idx: int):
+        self.q_id = q_id
+        self.target_class = target_class
+        self.subject = subject
+        self.topic = topic
+        self.text = text
+        self.options = options
+        self.correct_idx = correct_idx
+
+
+class Resource:
+    """Stores learning material details tagged with target class, subject, topic, and actual URL."""
+    def __init__(self, res_id: str, target_class: str, subject: str, topic: str, title: str, url: str):
+        self.res_id = res_id
+        self.target_class = target_class
+        self.subject = subject
+        self.topic = topic
+        self.title = title
+        self.url = url
+
+
+class Assessment:
+    """Evaluates performance metrics for subject topics."""
+    def __init__(self, subject: str, topic: str, max_marks: int, scored_marks: int):
+        self.subject = subject
+        self.topic = topic
+        self.max_marks = max_marks
+        self.scored_marks = scored_marks
+
+    def get_percentage(self) -> float:
+        return (self.scored_marks / self.max_marks) * 100 if self.max_marks > 0 else 0.0
+
+
+class Student:
+    """Holds student profile and assessment data."""
+    def __init__(self, name: str, student_class: str):
+        self.name = name
+        self.student_class = student_class
+        self.assessments: List[Assessment] = []
+
+    def clear_assessments(self):
+        self.assessments = []
+
+    def add_assessment(self, assessment: Assessment):
+        self.assessments.append(assessment)
+
+    def get_total_scored(self) -> int:
+        return sum(a.scored_marks for a in self.assessments)
+
+    def get_total_max(self) -> int:
+        return sum(a.max_marks for a in self.assessments)
+
+    def get_overall_percentage(self) -> float:
+        tot_max = self.get_total_max()
+        return (self.get_total_scored() / tot_max * 100) if tot_max > 0 else 0.0
+
+    def get_topic_breakdown(self):
+        strong_topics = []
+        weak_topics = []
+        for asm in self.assessments:
+            pct = asm.get_percentage()
+            if pct < 60.0:
+                weak_topics.append((asm.subject, asm.topic, pct))
+            else:
+                strong_topics.append((asm.subject, asm.topic, pct))
+        return strong_topics, weak_topics
+
+
+# ==========================================
+# 2. SYSTEM ENGINE (15 QUESTIONS PER CLASS)
+# ==========================================
+
+class Learn4AllEngine:
+    def __init__(self):
+        self.students: List[Student] = []
+        self.questions: List[Question] = []
+        self.resources: List[Resource] = []
+
+        self._seed_questions()
+        self._seed_resources()
+        self._seed_sample_students()
+
+    def _seed_questions(self):
+        """Seeds exactly 15 questions per class for Classes 1 through 10 across wide subject topics."""
+        self.questions = [
+            # CLASS 1 (15 Questions)
+            Question(1, "Class 1", "Mathematics", "Counting", "What number comes after 7?", ["6", "8", "9", "5"], 1),
+            Question(2, "Class 1", "Mathematics", "Addition", "What is 3 + 2?", ["4", "5", "6", "3"], 1),
+            Question(3, "Class 1", "EVS", "Animals", "Which animal says 'Meow'?", ["Dog", "Cat", "Cow", "Duck"], 1),
+            Question(4, "Class 1", "EVS", "Body Parts", "Which body part is used to see things?", ["Ears", "Nose", "Eyes", "Hands"], 2),
+            Question(5, "Class 1", "English", "Alphabet", "Which letter comes after 'M' in the alphabet?", ["L", "N", "O", "P"], 1),
+            Question(6, "Class 1", "English", "Vowels", "Which of these is a vowel?", ["B", "E", "D", "F"], 1),
+            Question(7, "Class 1", "Computer", "Basics", "Which part of the computer looks like a TV screen?", ["Mouse", "Monitor", "Keyboard", "CPU"], 1),
+            Question(8, "Class 1", "Computer", "Basics", "What do we use to type words on a computer?", ["Keyboard", "Mouse", "Speaker", "Printer"], 0),
+            Question(9, "Class 1", "GK", "Colors", "What color is the sky on a clear day?", ["Green", "Blue", "Red", "Yellow"], 1),
+            Question(10, "Class 1", "GK", "Shapes", "How many sides does a triangle have?", ["4", "3", "2", "5"], 1),
+            Question(11, "Class 1", "Art", "Colors", "Which primary color do you mix with Blue to get Green?", ["Red", "Yellow", "White", "Black"], 1),
+            Question(12, "Class 1", "EVS", "Plants", "Plants need water and ____ to grow.", ["Juice", "Sunlight", "Milk", "Soda"], 1),
+            Question(13, "Class 1", "English", "Rhyming Words", "Which word rhymes with 'CAT'?", ["Dog", "Hat", "Pen", "Box"], 1),
+            Question(14, "Class 1", "Mathematics", "Subtraction", "What is 5 - 2?", ["2", "3", "4", "1"], 1),
+            Question(15, "Class 1", "Health", "Hygiene", "How many times should we brush our teeth daily?", ["Once", "Twice", "Five times", "Never"], 1),
+
+            # CLASS 2 (15 Questions)
+            Question(16, "Class 2", "Mathematics", "Subtraction", "What is 15 - 7?", ["7", "8", "9", "6"], 1),
+            Question(17, "Class 2", "Mathematics", "Shapes", "A shape with 4 equal sides is called a?", ["Rectangle", "Square", "Triangle", "Circle"], 1),
+            Question(18, "Class 2", "EVS", "Plants", "Which part of the plant grows under the soil?", ["Stem", "Leaf", "Root", "Flower"], 2),
+            Question(19, "Class 2", "EVS", "Seasons", "In which season do we wear warm woolen clothes?", ["Summer", "Winter", "Monsoon", "Spring"], 1),
+            Question(20, "Class 2", "English", "Nouns", "Identify the naming word (Noun): 'The dog barked.'", ["barked", "dog", "The", "loudly"], 1),
+            Question(21, "Class 2", "English", "Plurals", "What is the plural of 'Child'?", ["Childs", "Children", "Childrens", "Childes"], 1),
+            Question(22, "Class 2", "Computer", "Devices", "Which computer part is used to click and select items?", ["Keyboard", "Mouse", "Monitor", "CPU"], 1),
+            Question(23, "Class 2", "Computer", "Rules", "We should keep liquids away from computers. True or False?", ["True", "False", "Sometimes", "Not sure"], 0),
+            Question(24, "Class 2", "GK", "National Symbols", "What is the national animal of India?", ["Lion", "Tiger", "Elephant", "Leopard"], 1),
+            Question(25, "Class 2", "GK", "Time", "How many hours are there in a full day?", ["12", "24", "48", "60"], 1),
+            Question(26, "Class 2", "Mathematics", "Money", "How many 50-paisa coins make 1 Rupee?", ["1", "2", "3", "4"], 1),
+            Question(27, "Class 2", "Science", "Animals", "Animals that eat only plants are called?", ["Carnivores", "Herbivores", "Omnivores", "Insects"], 1),
+            Question(28, "Class 2", "English", "Articles", "Fill in: '___ apple a day keeps the doctor away.'", ["A", "An", "The", "Some"], 1),
+            Question(29, "Class 2", "SST", "Family", "Your mother's father is your?", ["Uncle", "Grandfather", "Brother", "Nephew"], 1),
+            Question(30, "Class 2", "Health", "Safety", "Where should we cross the road?", ["Anywhere", "Zebra Crossing", "Near corners", "Over fences"], 1),
+
+            # CLASS 3 (15 Questions)
+            Question(31, "Class 3", "Mathematics", "Multiplication", "What is 6 × 7?", ["36", "42", "48", "54"], 1),
+            Question(32, "Class 3", "Mathematics", "Measurement", "How many centimeters are in 1 meter?", ["10", "100", "1000", "50"], 1),
+            Question(33, "Class 3", "Science", "Living Things", "Which of the following is a non-living thing?", ["Tree", "Dog", "Rock", "Bird"], 2),
+            Question(34, "Class 3", "Science", "Water", "Water turns into ice upon?", ["Boiling", "Freezing", "Evaporation", "Melting"], 1),
+            Question(35, "Class 3", "English", "Verbs", "Identify the action word (Verb): 'She dances gracefully.'", ["She", "gracefully", "dances", "girl"], 2),
+            Question(36, "Class 3", "English", "Opposites", "What is the antonym of 'Heavy'?", ["Big", "Light", "Dark", "Soft"], 1),
+            Question(37, "Class 3", "Computer", "Storage", "Which device is used to save our work permanently?", ["RAM", "Hard Disk", "Monitor", "Keyboard"], 1),
+            Question(38, "Class 3", "Computer", "Software", "Paint is used for?", ["Calculations", "Drawing", "Typing letters", "Playing audio"], 1),
+            Question(39, "Class 3", "SST", "Maps", "A book of maps is called an?", ["Dictionary", "Atlas", "Encyclopedia", "Novel"], 1),
+            Question(40, "Class 3", "SST", "Directions", "The Sun rises in the?", ["West", "East", "North", "South"], 1),
+            Question(41, "Class 3", "Mathematics", "Fractions", "What fraction of a pizza is 2 slices out of 4?", ["1/4", "2/4", "3/4", "4/4"], 1),
+            Question(42, "Class 3", "Science", "Birds", "Which bird cannot fly?", ["Eagle", "Penguin", "Sparrow", "Pigeon"], 1),
+            Question(43, "Class 3", "English", "Punctuation", "A question sentence always ends with a?", ["Full Stop", "Question Mark", "Comma", "Exclamation"], 1),
+            Question(44, "Class 3", "SST", "Transport", "Which is the fastest mode of transport?", ["Train", "Air Transport", "Ship", "Bus"], 1),
+            Question(45, "Class 3", "GK", "Space", "Earth gets heat and light from the?", ["Moon", "Sun", "Stars", "Mars"], 1),
+
+            # CLASS 4 (15 Questions)
+            Question(46, "Class 4", "Mathematics", "Division", "What is 81 ÷ 9?", ["7", "8", "9", "6"], 2),
+            Question(47, "Class 4", "Mathematics", "Fractions", "Which fraction represents half?", ["1/3", "1/2", "1/4", "2/3"], 1),
+            Question(48, "Class 4", "Science", "Digestive System", "Where does digestion start in the human body?", ["Stomach", "Mouth", "Small Intestine", "Food Pipe"], 1),
+            Question(49, "Class 4", "Science", "States of Matter", "Which state of matter has a definite shape and volume?", ["Gas", "Liquid", "Solid", "Plasma"], 2),
+            Question(50, "Class 4", "English", "Adjectives", "Find the adjective: 'The smart boy solved the puzzle.'", ["boy", "smart", "solved", "puzzle"], 1),
+            Question(51, "Class 4", "English", "Tenses", "Choose the future tense verb: 'They ___ tomorrow.'", ["went", "will go", "go", "gone"], 1),
+            Question(52, "Class 4", "Computer", "Input/Output", "Which of these is an output device?", ["Keyboard", "Printer", "Scanner", "Microphone"], 1),
+            Question(53, "Class 4", "Computer", "Internet", "What does WWW stand for?", ["World Wide Web", "World Whole Web", "Wide World Web", "Web World Wide"], 0),
+            Question(54, "Class 4", "SST", "Landforms", "A high flat land is called a?", ["Mountain", "Plateau", "Plain", "Valley"], 1),
+            Question(55, "Class 4", "SST", "Government", "Who is the head of the country's government?", ["President", "Prime Minister", "Governor", "Mayor"], 1),
+            Question(56, "Class 4", "Mathematics", "Perimeter", "Perimeter of a square with side 4cm is?", ["8cm", "12cm", "16cm", "20cm"], 2),
+            Question(57, "Class 4", "Science", "Adaptation", "Cactus plants store water in their?", ["Leaves", "Stem", "Roots", "Thorns"], 1),
+            Question(58, "Class 4", "English", "Synonyms", "Synonym for 'Joyful' is?", ["Sad", "Happy", "Angry", "Tired"], 1),
+            Question(59, "Class 4", "GK", "Inventions", "Who invented the telephone?", ["Edison", "Graham Bell", "Newton", "Tesla"], 1),
+            Question(60, "Class 4", "SST", "Culture", "Which festival is known as the festival of lights?", ["Holi", "Diwali", "Eid", "Christmas"], 1),
+
+            # CLASS 5 (15 Questions)
+            Question(61, "Class 5", "Mathematics", "Decimals", "What is 0.4 + 0.15?", ["0.19", "0.55", "0.45", "0.60"], 1),
+            Question(62, "Class 5", "Mathematics", "Angles", "An angle less than 90 degrees is called?", ["Obtuse", "Acute", "Right", "Straight"], 1),
+            Question(63, "Class 5", "Science", "Ecosystem", "Organisms that make their own food are called?", ["Consumers", "Producers", "Decomposers", "Parasites"], 1),
+            Question(64, "Class 5", "Science", "Simple Machines", "A ramp used to roll heavy loads is an example of an?", ["Incline Plane", "Lever", "Pulley", "Screw"], 0),
+            Question(65, "Class 5", "English", "Conjunctions", "Fill in: 'I was tired ___ I kept working.'", ["because", "but", "so", "or"], 1),
+            Question(66, "Class 5", "English", "Prepositions", "The book is ___ the table.", ["on", "underneath", "into", "between"], 0),
+            Question(67, "Class 5", "Computer", "Generations", "Which technology was used in 1st Generation computers?", ["Transistors", "Vacuum Tubes", "Microprocessors", "ICs"], 1),
+            Question(68, "Class 5", "Computer", "Security", "Software designed to protect computers from viruses is?", ["Antivirus", "Malware", "Spyware", "Adware"], 0),
+            Question(69, "Class 5", "SST", "Globe", "The 0-degree longitude line is known as?", ["Equator", "Prime Meridian", "Tropic of Cancer", "Antarctic Circle"], 1),
+            Question(70, "Class 5", "SST", "History", "Who was known as the 'Father of the Nation' in India?", ["Jawaharlal Nehru", "Mahatma Gandhi", "Subhas Chandra Bose", "Bhagat Singh"], 1),
+            Question(71, "Class 5", "Mathematics", "Area", "Area of a rectangle with length 5cm and width 3cm?", ["8 cm²", "15 cm²", "16 cm²", "12 cm²"], 1),
+            Question(72, "Class 5", "Science", "Respiratory", "Which human organ pumps oxygenated blood?", ["Lungs", "Heart", "Kidneys", "Liver"], 1),
+            Question(73, "Class 5", "English", "Idioms", "'Piece of cake' means?", ["Delicious food", "Very easy task", "Sweet dessert", "Difficult goal"], 1),
+            Question(74, "Class 5", "GK", "Oceans", "Which is the largest ocean on Earth?", ["Atlantic", "Pacific", "Indian", "Arctic"], 1),
+            Question(75, "Class 5", "Computer", "Shortcuts", "Shortcut key to Copy selected text in Windows?", ["Ctrl + V", "Ctrl + C", "Ctrl + X", "Ctrl + Z"], 1),
+
+            # CLASS 6 (15 Questions)
+            Question(76, "Class 6", "Mathematics", "Fractions", "What is 1/2 + 1/4?", ["2/4", "3/4", "1/6", "2/6"], 1),
+            Question(77, "Class 6", "Mathematics", "Decimals", "Which is greater: 0.5 or 0.05?", ["0.05", "0.5", "Both Equal", "None"], 1),
+            Question(78, "Class 6", "Science", "Nutrition", "Which nutrient is the primary energy source?", ["Proteins", "Carbohydrates", "Vitamins", "Minerals"], 1),
+            Question(79, "Class 6", "Science", "Fibre to Fabric", "Cotton yarn is made from which part of the plant?", ["Flower", "Fruit", "Stem", "Leaf"], 1),
+            Question(80, "Class 6", "English", "Grammar", "Which word is a Proper Noun in: 'London is a big city'?", ["big", "city", "London", "is"], 2),
+            Question(81, "Class 6", "English", "Grammar", "What is the past tense of 'Go'?", ["Goed", "Gone", "Went", "Going"], 2),
+            Question(82, "Class 6", "Computer", "Basics", "Which component is known as the brain of the computer?", ["RAM", "Hard Disk", "CPU", "Monitor"], 2),
+            Question(83, "Class 6", "Computer", "Input Devices", "Which of these is an input device?", ["Printer", "Speaker", "Mouse", "Monitor"], 2),
+            Question(84, "Class 6", "SST", "Geography", "What divides Earth into Northern and Southern hemispheres?", ["Equator", "Prime Meridian", "Tropic of Cancer", "Arctic Circle"], 0),
+            Question(85, "Class 6", "SST", "History", "The earliest written books in India were recorded on?", ["Paper", "Palm leaves", "Wood", "Cloth"], 1),
+            Question(86, "Class 6", "Mathematics", "Ratios", "Simplify the ratio 10 : 20.", ["1 : 2", "2 : 1", "1 : 3", "2 : 3"], 0),
+            Question(87, "Class 6", "Science", "Magnetism", "Like poles of two magnets always?", ["Attract", "Repel", "Rotate", "Stick"], 1),
+            Question(88, "Class 6", "English", "Prepositions", "He jumped ___ the swimming pool.", ["in", "into", "on", "upon"], 1),
+            Question(89, "Class 6", "SST", "Civics", "The minimum age for voting in India is?", ["16 years", "18 years", "21 years", "25 years"], 1),
+            Question(90, "Class 6", "Computer", "Internet", "A unique address identifying a web page is called?", ["IP", "URL", "HTTP", "HTML"], 1),
+
+            # CLASS 7 (15 Questions)
+            Question(91, "Class 7", "Mathematics", "Integers", "What is (-5) × (-4)?", ["-20", "20", "-9", "9"], 1),
+            Question(92, "Class 7", "Mathematics", "Algebra", "Simplify: 3x + 2x", ["5x²", "5x", "6x", "x"], 1),
+            Question(93, "Class 7", "Science", "Photosynthesis", "Green pigment that traps sunlight in plants is?", ["Hemoglobin", "Chlorophyll", "Xanthophyll", "Melanin"], 1),
+            Question(94, "Class 7", "Science", "Heat", "Heat transfer in liquids and gases primarily occurs by?", ["Conduction", "Convection", "Radiation", "Insulation"], 1),
+            Question(95, "Class 7", "English", "Pronouns", "Choose the reflexive pronoun: 'She served ____ the cake.'", ["herself", "himself", "themselves", "myself"], 0),
+            Question(96, "Class 7", "English", "Vocabulary", "Antonym for the word 'Ancient' is?", ["Old", "Modern", "Historic", "Aged"], 1),
+            Question(97, "Class 7", "Computer", "Storage", "Which of these is volatile primary memory?", ["Pendrive", "RAM", "Hard Disk", "DVD"], 1),
+            Question(98, "Class 7", "Computer", "Software", "System software that manages computer hardware is?", ["Word", "Photoshop", "Operating System", "Excel"], 2),
+            Question(99, "Class 7", "SST", "History", "Who was the founder of the Mughal Empire in India?", ["Akbar", "Babur", "Humayun", "Shah Jahan"], 1),
+            Question(100, "Class 7", "SST", "Civics", "Who is the head of the State Government in India?", ["Prime Minister", "Chief Minister", "President", "Mayor"], 1),
+            Question(101, "Class 7", "Mathematics", "Triangles", "Sum of all interior angles in any triangle is?", ["90°", "180°", "270°", "360°"], 1),
+            Question(102, "Class 7", "Science", "Acids & Bases", "Litmus indicator turns red in which solution?", ["Acidic", "Basic", "Neutral", "Salty"], 0),
+            Question(103, "Class 7", "English", "Conjunctions", "Choose the correct conjunction: 'Work hard ___ you will fail.'", ["and", "or", "so", "but"], 1),
+            Question(104, "Class 7", "SST", "Geography", "Which layer of Atmosphere contains Ozone gas?", ["Troposphere", "Stratosphere", "Mesosphere", "Thermosphere"], 1),
+            Question(105, "Class 7", "Computer", "Number Systems", "Base value of the Binary number system is?", ["8", "10", "2", "16"], 2),
+
+            # CLASS 8 (15 Questions)
+            Question(106, "Class 8", "Mathematics", "Linear Equations", "Solve for x: 3x - 5 = 10", ["x = 3", "x = 5", "x = 15", "x = 2"], 1),
+            Question(107, "Class 8", "Mathematics", "Squares & Roots", "What is the square root of 144?", ["10", "12", "14", "16"], 1),
+            Question(108, "Class 8", "Science", "Cell Structure", "Which organelle is called the powerhouse of the cell?", ["Ribosome", "Mitochondria", "Nucleus", "Vacuole"], 1),
+            Question(109, "Class 8", "Science", "Friction", "Friction can be reduced using which of the following?", ["Sand", "Lubricants", "Rough surfaces", "Spikes"], 1),
+            Question(110, "Class 8", "English", "Voice", "Change to Passive: 'The cat chased the mouse.'", ["The mouse was chased by the cat.", "The mouse chased cat.", "Cat was chasing mouse.", "Mouse chased by cat."], 0),
+            Question(111, "Class 8", "English", "Direct/Indirect", "He said, 'I am ready.' in indirect speech is?", ["He said he was ready.", "He says he is ready.", "He told ready.", "He said I am ready."], 0),
+            Question(112, "Class 8", "Computer", "Networks", "Topological structure connecting all nodes to a central hub?", ["Bus", "Star", "Ring", "Mesh"], 1),
+            Question(113, "Class 8", "Computer", "Cybersecurity", "Unauthorized access to computer systems is called?", ["Surfing", "Hacking", "Downloading", "Broadcasting"], 1),
+            Question(114, "Class 8", "SST", "Civics", "Supreme law-making body in India is?", ["Judiciary", "Executive", "Parliament", "Police"], 2),
+            Question(115, "Class 8", "SST", "Geography", "Resources that can be renewed naturally over time are?", ["Non-renewable", "Renewable", "Potential", "Abiotic"], 1),
+            Question(116, "Class 8", "Mathematics", "Exponents", "What is 2⁴?", ["8", "12", "16", "32"], 2),
+            Question(117, "Class 8", "Science", "Sound", "Sound cannot travel through which medium?", ["Air", "Water", "Vacuum", "Steel"], 2),
+            Question(118, "Class 8", "English", "Modals", "Which modal indicates request: '____ I come in?'", ["May", "Must", "Should", "Will"], 0),
+            Question(119, "Class 8", "SST", "History", "Who was the Governor-General during the Revolt of 1857?", ["Dalhousie", "Canning", "Curzon", "Ripon"], 1),
+            Question(120, "Class 8", "Computer", "HTML", "Which tag is used for line break in HTML?", ["<lb>", "<br>", "<break>", "<p>"], 1),
+
+            # CLASS 9 (15 Questions)
+            Question(121, "Class 9", "Mathematics", "Polynomials", "Degree of the polynomial 4x³ + 2x² - 7 is?", ["1", "2", "3", "4"], 2),
+            Question(122, "Class 9", "Mathematics", "Coordinate Geo", "Point (0, 4) lies on which axis?", ["X-axis", "Y-axis", "Origin", "Quadrant 3"], 1),
+            Question(123, "Class 9", "Science", "Motion", "SI unit of acceleration is?", ["m/s", "m/s²", "km/h", "N/m"], 1),
+            Question(124, "Class 9", "Science", "Atoms", "Valency of Carbon atom is?", ["2", "3", "4", "6"], 2),
+            Question(125, "Class 9", "English", "Modals", "Which modal verb expresses strong compulsion/obligation?", ["might", "must", "could", "would"], 1),
+            Question(126, "Class 9", "English", "Grammar", "Subject-verb agreement: 'Each of the boys ____ given a prize.'", ["were", "was", "are", "have"], 1),
+            Question(127, "Class 9", "Computer", "Python", "Which data structure is immutable in Python?", ["List", "Dictionary", "Tuple", "Set"], 2),
+            Question(128, "Class 9", "Computer", "Logic Gates", "Which logic gate outputs 1 only when both inputs are 1?", ["OR Gate", "NOT Gate", "AND Gate", "NAND Gate"], 2),
+            Question(129, "Class 9", "SST", "Geography", "Which river is popularly known as 'Dakshin Ganga'?", ["Narmada", "Godavari", "Krishna", "Kaveri"], 1),
+            Question(130, "Class 9", "SST", "History", "The French Revolution began in which year?", ["1776", "1789", "1804", "1815"], 1),
+            Question(131, "Class 9", "Mathematics", "Geometry", "Heron's formula is used to calculate area of a?", ["Circle", "Triangle", "Quadrilateral", "Polygon"], 1),
+            Question(132, "Class 9", "Science", "Tissues", "Which muscular tissue is involuntary and non-striated?", ["Skeletal", "Smooth", "Cardiac", "Nervous"], 1),
+            Question(133, "Class 9", "English", "Clauses", "Identify clause: 'When the sun set, they returned home.'", ["Noun Clause", "Adverb Clause", "Adjective Clause", "Relative"], 1),
+            Question(134, "Class 9", "SST", "Economics", "Human capital formation requires investment in education and?", ["Health", "Gold", "Property", "Vehicles"], 0),
+            Question(135, "Class 9", "Computer", "Operating Systems", "Which OS distribution is Open Source?", ["Windows", "Linux", "macOS", "iOS"], 1),
+
+            # CLASS 10 (15 Questions)
+            Question(136, "Class 10", "Mathematics", "Quadratic Eq", "Discriminant formula for ax² + bx + c = 0?", ["b² - 4ac", "b² + 4ac", "2a / b", "4ac - b²"], 0),
+            Question(137, "Class 10", "Mathematics", "Trigonometry", "What is the value of sin(90°)?", ["0", "1/2", "1", "Undefined"], 2),
+            Question(138, "Class 10", "Science", "Light", "Lens type used to correct short-sightedness (myopia)?", ["Convex Lens", "Concave Lens", "Bifocal Lens", "Cylindrical"], 1),
+            Question(139, "Class 10", "Science", "Electricity", "SI unit of Electric Current is?", ["Volt", "Ohm", "Ampere", "Watt"], 2),
+            Question(140, "Class 10", "English", "Reported Speech", "He said, 'I am busy.' -> He said that he _____ busy.", ["is", "was", "has been", "had been"], 1),
+            Question(141, "Class 10", "English", "Clauses", "Identify clause type: 'I know the girl WHO WON THE RACE.'", ["Noun Clause", "Adjective Clause", "Adverb Clause", "Prepositional"], 1),
+            Question(142, "Class 10", "Computer", "Web Basics", "Which HTML tag creates a hyperlink?", ["<link>", "<a>", "<href>", "<url>"], 1),
+            Question(143, "Class 10", "Computer", "DBMS", "Which key uniquely identifies each record in a database table?", ["Foreign Key", "Primary Key", "Super Key", "Alternate Key"], 1),
+            Question(144, "Class 10", "SST", "Economics", "Which central institution issues currency notes in India?", ["State Bank of India", "Reserve Bank of India", "Ministry of Finance", "World Bank"], 1),
+            Question(145, "Class 10", "SST", "Civics", "Power sharing between Central and State governments is called?", ["Dictatorship", "Federalism", "Monarchy", "Anarchy"], 1),
+            Question(146, "Class 10", "Mathematics", "Arithmetic Prog", "Formula for nth term of AP with first term 'a' and common diff 'd'?", ["a + nd", "a + (n-1)d", "a - (n-1)d", "n(a+d)"], 1),
+            Question(147, "Class 10", "Science", "Chemistry", "pH value of pure neutral water at room temp is?", ["0", "7", "14", "1"], 1),
+            Question(148, "Class 10", "English", "Literature", "In 'Letter to God', what destroyed Lencho's crop?", ["Flood", "Drought", "Hailstorm", "Fire"], 2),
+            Question(149, "Class 10", "SST", "History", "Who led the Salt March to Dandi in 1930?", ["Bhagat Singh", "Mahatma Gandhi", "Subhas Chandra Bose", "Nehru"], 1),
+            Question(150, "Class 10", "Computer", "Networking", "Which protocol is used to transfer files over the web securely?", ["HTTP", "HTTPS", "FTP", "SMTP"], 1)
+        ]
+
+    def _seed_resources(self):
+        """Seeds study resources mapped across all topics to guarantee study material coverage."""
+        self.resources.extend([
+            # Class 1
+            Resource("R001", "Class 1", "Mathematics", "Counting", "Counting Numbers 1 to 10 for Kids", "https://www.youtube.com/watch?v=D0Ajq682yrA"),
+            Resource("R002", "Class 1", "Mathematics", "Addition", "Khan Academy Kids: Basic Addition", "https://www.youtube.com/watch?v=fe9485Q-_iI"),
+            Resource("R003", "Class 1", "Mathematics", "Subtraction", "Basic Subtraction for Beginners", "https://www.youtube.com/watch?v=y34p2L_y0cM"),
+            Resource("R004", "Class 1", "EVS", "Animals", "Animal Sounds and Names for Kids", "https://www.youtube.com/watch?v=t99ULJjC64A"),
+            Resource("R005", "Class 1", "EVS", "Body Parts", "Human Body Parts Lesson for Kids", "https://www.youtube.com/watch?v=SUt8q0EKbms"),
+            Resource("R006", "Class 1", "EVS", "Plants", "Educational Video: Plants and Flowers", "https://www.youtube.com/watch?v=p3St51F45E8"),
+            Resource("R007", "Class 1", "English", "Alphabet", "Learn ABCs & Letter Sounds", "https://www.youtube.com/watch?v=ezmsrB59mj8"),
+            Resource("R008", "Class 1", "English", "Vowels", "Vowels and Consonants Practice", "https://www.youtube.com/watch?v=arQxKD9prbc"),
+            Resource("R009", "Class 1", "English", "Rhyming Words", "Rhyming Words Song for Class 1", "https://www.youtube.com/watch?v=cSPmGPIyykU"),
+            Resource("R010", "Class 1", "Computer", "Basics", "Introduction to Computer Parts for Class 1", "https://www.youtube.com/watch?v=4d_K98E3L0Q"),
+            Resource("R011", "Class 1", "GK", "Colors", "Learning Primary and Secondary Colors", "https://www.youtube.com/watch?v=tkpfg-1FJLU"),
+            Resource("R012", "Class 1", "GK", "Shapes", "Basic Geometric Shapes Lesson", "https://www.youtube.com/watch?v=OEbRDtCAFdU"),
+            Resource("R013", "Class 1", "Art", "Colors", "Color Mixing Guide for Children", "https://www.youtube.com/watch?v=yIN_T83vR4s"),
+            Resource("R014", "Class 1", "Health", "Hygiene", "Good Habits and Personal Hygiene Guide", "https://www.youtube.com/watch?v=dDHJW4r3elE"),
+
+            # Class 2
+            Resource("R015", "Class 2", "Mathematics", "Subtraction", "2-Digit Subtraction Made Easy", "https://www.youtube.com/watch?v=nO3_v8_l5qY"),
+            Resource("R016", "Class 2", "Mathematics", "Shapes", "2D and 3D Shapes Tutorial", "https://www.youtube.com/watch?v=2cg-Uc556-Q"),
+            Resource("R017", "Class 2", "Mathematics", "Money", "Understanding Coins and Currency", "https://www.youtube.com/watch?v=yS77iZyl8nE"),
+            Resource("R018", "Class 2", "EVS", "Plants", "Parts of Plants and Functions", "https://www.youtube.com/watch?v=p3St51F45E8"),
+            Resource("R019", "Class 2", "EVS", "Seasons", "Four Seasons in a Year Lesson", "https://www.youtube.com/watch?v=8ZjpI6fgA-I"),
+            Resource("R020", "Class 2", "English", "Nouns", "Nouns for Class 2 Students", "https://www.youtube.com/watch?v=8_yU43sN-tY"),
+            Resource("R021", "Class 2", "English", "Plurals", "Singular and Plural Words Guide", "https://www.youtube.com/watch?v=fB3zM92s-Cg"),
+            Resource("R022", "Class 2", "English", "Articles", "Usage of A, An, and The", "https://www.youtube.com/watch?v=7z90vG1r2pI"),
+            Resource("R023", "Class 2", "Computer", "Devices", "Input and Output Computer Devices", "https://www.youtube.com/watch?v=5x2bK3L8JcE"),
+            Resource("R024", "Class 2", "Computer", "Rules", "Computer Lab Safety Rules for Children", "https://www.youtube.com/watch?v=wXoH3u4r8i8"),
+            Resource("R025", "Class 2", "GK", "National Symbols", "National Symbols of India Lesson", "https://www.youtube.com/watch?v=Vz8v4bC1A9s"),
+            Resource("R026", "Class 2", "GK", "Time", "Reading Clocks and Telling Time", "https://www.youtube.com/watch?v=HrxZWNu72WI"),
+            Resource("R027", "Class 2", "Science", "Animals", "Herbivores, Carnivores, and Omnivores", "https://www.youtube.com/watch?v=V4R1xX-P3zY"),
+            Resource("R028", "Class 2", "SST", "Family", "Understanding Family Relations", "https://www.youtube.com/watch?v=f93aX-5_01A"),
+            Resource("R029", "Class 2", "Health", "Safety", "Road Safety Rules for Young Children", "https://www.youtube.com/watch?v=1x_R_m8vD8s"),
+
+            # Class 3
+            Resource("R030", "Class 3", "Mathematics", "Multiplication", "Multiplication Tables Made Easy", "https://www.youtube.com/watch?v=eW2LgZae8c8"),
+            Resource("R031", "Class 3", "Mathematics", "Measurement", "Length Measurement: Meters and Centimeters", "https://www.youtube.com/watch?v=3n8J1y5nL6I"),
+            Resource("R032", "Class 3", "Mathematics", "Fractions", "Understanding Simple Fractions", "https://www.youtube.com/watch?v=DnFrOwejC3M"),
+            Resource("R033", "Class 3", "Science", "Living Things", "Living and Non-Living Things Concepts", "https://www.youtube.com/watch?v=tzN299N_C4U"),
+            Resource("R034", "Class 3", "Science", "Water", "States of Water & Freezing Process", "https://www.youtube.com/watch?v=w4q78a1zR9E"),
+            Resource("R035", "Class 3", "Science", "Birds", "Feathers, Beaks, and Flightless Birds", "https://www.youtube.com/watch?v=2rE48jB0l1M"),
+            Resource("R036", "Class 3", "English", "Verbs", "Action Words and Verbs Explanation", "https://www.youtube.com/watch?v=68E4rA-8uO4"),
+            Resource("R037", "Class 3", "English", "Opposites", "Antonyms and Opposites for Beginners", "https://www.youtube.com/watch?v=f9N1o8a9t_4"),
+            Resource("R038", "Class 3", "English", "Punctuation", "Punctuation Marks Rules", "https://www.youtube.com/watch?v=LdCOswMeXFQ"),
+            Resource("R039", "Class 3", "Computer", "Storage", "Primary and Secondary Storage Basics", "https://www.youtube.com/watch?v=6_z_5PzM3zI"),
+            Resource("R040", "Class 3", "Computer", "Software", "MS Paint Drawing Tools Crash Course", "https://www.youtube.com/watch?v=2N8q4G8L-kM"),
+            Resource("R041", "Class 3", "SST", "Maps", "How to Read Maps and Atlases", "https://www.youtube.com/watch?v=dp8VOG8Cgag"),
+            Resource("R042", "Class 3", "SST", "Directions", "Cardinal Directions: North, South, East, West", "https://www.youtube.com/watch?v=UeeLewI-R1s"),
+            Resource("R043", "Class 3", "SST", "Transport", "Modes of Transport Guide", "https://www.youtube.com/watch?v=5kK4qO1J0cI"),
+            Resource("R044", "Class 3", "GK", "Space", "Solar System Overview", "https://www.youtube.com/watch?v=libKVRa0740"),
+
+            # Class 4
+            Resource("R045", "Class 4", "Mathematics", "Division", "Long Division Step-by-Step", "https://www.youtube.com/watch?v=KGMf318O8x0"),
+            Resource("R046", "Class 4", "Mathematics", "Fractions", "Equivalent Fractions Guide", "https://www.youtube.com/watch?v=vKXqzpz-G0s"),
+            Resource("R047", "Class 4", "Mathematics", "Perimeter", "Calculating Perimeter of Shapes", "https://www.youtube.com/watch?v=AAY1bsazcgM"),
+            Resource("R048", "Class 4", "Science", "Digestive System", "Human Digestive System Explained", "https://www.youtube.com/watch?v=v3E1txcKffX"),
+            Resource("R049", "Class 4", "Science", "States of Matter", "Solids, Liquids, and Gases Overview", "https://www.youtube.com/watch?v=wclY8F-UoTE"),
+            Resource("R050", "Class 4", "Science", "Adaptation", "Plant Adaptation in Desert & Aquatic Regions", "https://www.youtube.com/watch?v=2v-p9fM3q9s"),
+            Resource("R051", "Class 4", "English", "Adjectives", "Adjectives and Describing Words", "https://www.youtube.com/watch?v=94S35x_M2Yk"),
+            Resource("R052", "Class 4", "English", "Tenses", "Introduction to Present, Past, and Future Tenses", "https://www.youtube.com/watch?v=34O53mE_yO8"),
+            Resource("R053", "Class 4", "English", "Synonyms", "Synonyms and Word Meanings", "https://www.youtube.com/watch?v=84E7yL8D13Y"),
+            Resource("R054", "Class 4", "Computer", "Input/Output", "Difference between Input and Output Devices", "https://www.youtube.com/watch?v=68X9eZ0M4gU"),
+            Resource("R055", "Class 4", "Computer", "Internet", "What is the Internet & World Wide Web?", "https://www.youtube.com/watch?v=7_LPdttKXPc"),
+            Resource("R056", "Class 4", "SST", "Landforms", "Major Landforms: Mountains, Plateaus, Plains", "https://www.youtube.com/watch?v=FN6QX43ks4w"),
+            Resource("R057", "Class 4", "SST", "Government", "Structure of Government Basics", "https://www.youtube.com/watch?v=7c8M9eX2W1Q"),
+            Resource("R058", "Class 4", "SST", "Culture", "Cultural Diversity & Festivals of India", "https://www.youtube.com/watch?v=8x-5dY_o4N0"),
+            Resource("R059", "Class 4", "GK", "Inventions", "Famous Scientific Inventions and Discoveries", "https://www.youtube.com/watch?v=9_K_9A2J1cI"),
+
+            # Class 5
+            Resource("R060", "Class 5", "Mathematics", "Decimals", "Khan Academy: Introduction to Decimals", "https://www.youtube.com/watch?v=KG6IL7I04_8"),
+            Resource("R061", "Class 5", "Mathematics", "Angles", "Types of Angles: Acute, Obtuse, Right", "https://www.youtube.com/watch?v=DGKwdHMiqCg"),
+            Resource("R062", "Class 5", "Mathematics", "Area", "Finding Area of Rectangles and Squares", "https://www.youtube.com/watch?v=xCdxURXMdFY"),
+            Resource("R063", "Class 5", "Science", "Ecosystem", "Producers, Consumers, and Decomposers", "https://www.youtube.com/watch?v=hG90cRj2b3M"),
+            Resource("R064", "Class 5", "Science", "Simple Machines", "Lever, Pulley, and Inclined Plane Guide", "https://www.youtube.com/watch?v=l1FmcE14y43"),
+            Resource("R065", "Class 5", "Science", "Respiratory", "Human Circulatory & Heart System", "https://www.youtube.com/watch?v=R-sK22WeA4s"),
+            Resource("R066", "Class 5", "English", "Conjunctions", "Joining Sentences with Conjunctions", "https://www.youtube.com/watch?v=RpO4eR45_3Q"),
+            Resource("R067", "Class 5", "English", "Prepositions", "Prepositions of Place and Time", "https://www.youtube.com/watch?v=xyMrLQ4zi-4"),
+            Resource("R068", "Class 5", "English", "Idioms", "Common English Idioms and Phrases", "https://www.youtube.com/watch?v=3f7PzM8J74E"),
+            Resource("R069", "Class 5", "Computer", "Generations", "Five Generations of Computers Explained", "https://www.youtube.com/watch?v=b4w08f870yA"),
+            Resource("R070", "Class 5", "Computer", "Security", "Antivirus & Cybersecurity Basics", "https://www.youtube.com/watch?v=inWWhr5tnEA"),
+            Resource("R071", "Class 5", "Computer", "Shortcuts", "Essential Windows Keyboard Shortcuts", "https://www.youtube.com/watch?v=7C99L7M8W3A"),
+            Resource("R072", "Class 5", "SST", "Globe", "Equator, Prime Meridian, and Coordinates", "https://www.youtube.com/watch?v=swKBi6hHHMA"),
+            Resource("R073", "Class 5", "SST", "History", "Indian Freedom Struggle Overview", "https://www.youtube.com/watch?v=48S-1j5Y3C8"),
+            Resource("R074", "Class 5", "GK", "Oceans", "Oceans and Continents Map Study", "https://www.youtube.com/watch?v=v3v4R74D3pI"),
+
+            # Class 6
+            Resource("R075", "Class 6", "Mathematics", "Fractions", "Adding & Subtracting Fractions with Unlike Denominators", "https://www.youtube.com/watch?v=CA9XLJpQp3c"),
+            Resource("R076", "Class 6", "Mathematics", "Decimals", "Comparing Decimals and Place Value", "https://www.youtube.com/watch?v=5EaT7p8Z24g"),
+            Resource("R077", "Class 6", "Mathematics", "Ratios", "Ratios and Proportions Made Simple", "https://www.youtube.com/watch?v=HpdMJaKaXXc"),
+            Resource("R078", "Class 6", "Science", "Nutrition", "Components of Food & Nutrients Overview", "https://www.youtube.com/watch?v=3-1s5zX3V7g"),
+            Resource("R079", "Class 6", "Science", "Fibre to Fabric", "Plant and Animal Fibres Explanation", "https://www.youtube.com/watch?v=5C-J_d2J3wE"),
+            Resource("R080", "Class 6", "Science", "Magnetism", "Magnetic Poles, Attraction & Repulsion", "https://www.youtube.com/watch?v=y25O6g2L_wY"),
+            Resource("R081", "Class 6", "English", "Grammar", "Nouns & Irregular Past Tense Verbs", "https://www.youtube.com/watch?v=84m48D3p4L8"),
+            Resource("R082", "Class 6", "English", "Prepositions", "Usage of In, Into, On, and Upon", "https://www.youtube.com/watch?v=xyMrLQ4zi-4"),
+            Resource("R083", "Class 6", "Computer", "Basics", "CPU Architecture and Internal Components", "https://www.youtube.com/watch?v=cNN_tTXABUA"),
+            Resource("R084", "Class 6", "Computer", "Input Devices", "Mouse, Keyboard, and Scanner Functions", "https://www.youtube.com/watch?v=5x2bK3L8JcE"),
+            Resource("R085", "Class 6", "Computer", "Internet", "Understanding URLs and IP Addresses", "https://www.youtube.com/watch?v=7_LPdttKXPc"),
+            Resource("R086", "Class 6", "SST", "Geography", "Latitudes, Longitudes & The Equator", "https://www.youtube.com/watch?v=swKBi6hHHMA"),
+            Resource("R087", "Class 6", "SST", "History", "Manuscripts and Inscriptions in Ancient India", "https://www.youtube.com/watch?v=e43S9_L3_04"),
+            Resource("R088", "Class 6", "SST", "Civics", "Democracy & Voting Rights in India", "https://www.youtube.com/watch?v=83x5_3E1vX8"),
+
+            # Class 7
+            Resource("R089", "Class 7", "Mathematics", "Integers", "YouTube Masterclass: Rules for Multiplying Integers", "https://www.youtube.com/watch?v=K_tPbVPfHgk"),
+            Resource("R090", "Class 7", "Mathematics", "Algebra", "Algebraic Expressions: Like and Unlike Terms", "https://www.youtube.com/watch?v=NybHckSEQBI"),
+            Resource("R091", "Class 7", "Mathematics", "Triangles", "Angle Sum Property of Triangles", "https://www.youtube.com/watch?v=p4fM_v8A7jE"),
+            Resource("R092", "Class 7", "Science", "Photosynthesis", "Photosynthesis in Plants Detailed Guide", "https://www.youtube.com/watch?v=UPBMG5EYbdA"),
+            Resource("R093", "Class 7", "Science", "Heat", "Modes of Heat Transfer: Conduction, Convection, Radiation", "https://www.youtube.com/watch?v=93A_b5eX8_A"),
+            Resource("R094", "Class 7", "Science", "Acids & Bases", "Litmus and pH Indicators Lesson", "https://www.youtube.com/watch?v=3A5z1C-Z8wY"),
+            Resource("R095", "Class 7", "English", "Pronouns", "Reflexive and Emphatic Pronouns", "https://www.youtube.com/watch?v=L2G5fX03w3k"),
+            Resource("R096", "Class 7", "English", "Vocabulary", "Antonyms and Synonyms Expansion", "https://www.youtube.com/watch?v=84E7yL8D13Y"),
+            Resource("R097", "Class 7", "English", "Conjunctions", "Correlative and Subordinating Conjunctions", "https://www.youtube.com/watch?v=RpO4eR45_3Q"),
+            Resource("R098", "Class 7", "Computer", "Storage", "RAM vs ROM & Volatile Memory", "https://www.youtube.com/watch?v=P113d5y9X-I"),
+            Resource("R099", "Class 7", "Computer", "Software", "Operating Systems Overview", "https://www.youtube.com/watch?v=vBURTt97EkA"),
+            Resource("R100", "Class 7", "Computer", "Number Systems", "Binary to Decimal Conversion Guide", "https://www.youtube.com/watch?v=vl_-780f2A0"),
+            Resource("R101", "Class 7", "SST", "History", "Mughal Empire: Babur to Aurangzeb", "https://www.youtube.com/watch?v=48S-1j5Y3C8"),
+            Resource("R102", "Class 7", "SST", "Civics", "Role of Chief Minister & State Government", "https://www.youtube.com/watch?v=7c8M9eX2W1Q"),
+            Resource("R103", "Class 7", "SST", "Geography", "Atmospheric Layers: Troposphere & Stratosphere", "https://www.youtube.com/watch?v=3S1i419_3S4"),
+
+            # Class 8
+            Resource("R104", "Class 8", "Mathematics", "Linear Equations", "YouTube Video: Solving Linear Equations Step-by-Step", "https://www.youtube.com/watch?v=bAerID24QJ0"),
+            Resource("R105", "Class 8", "Mathematics", "Squares & Roots", "Finding Square Roots by Prime Factorization", "https://www.youtube.com/watch?v=8kY4x75M0J0"),
+            Resource("R106", "Class 8", "Mathematics", "Exponents", "Laws of Exponents and Powers", "https://www.youtube.com/watch?v=kITJ6qH7jGU"),
+            Resource("R107", "Class 8", "Science", "Cell Structure", "Plant Cell vs Animal Cell & Organelles", "https://www.youtube.com/watch?v=URUJD5NEXC8"),
+            Resource("R108", "Class 8", "Science", "Friction", "Types of Friction & Lubrication Methods", "https://www.youtube.com/watch?v=32dC-wLpXkU"),
+            Resource("R109", "Class 8", "Science", "Sound", "Propagation of Sound & Need for Medium", "https://www.youtube.com/watch?v=4M8E3O-M_90"),
+            Resource("R110", "Class 8", "English", "Voice", "Active and Passive Voice Transformation Rules", "https://www.youtube.com/watch?v=W1_IRU6aC4k"),
+            Resource("R111", "Class 8", "English", "Direct/Indirect", "Direct to Indirect Speech Rules", "https://www.youtube.com/watch?v=13Y1G8M_21Y"),
+            Resource("R112", "Class 8", "English", "Modals", "Modal Verbs: May, Can, Could, Must", "https://www.youtube.com/watch?v=Nk_D_eM0M_s"),
+            Resource("R113", "Class 8", "Computer", "Networks", "Network Topologies: Bus, Star, Ring", "https://www.youtube.com/watch?v=zbqrN36_L3E"),
+            Resource("R114", "Class 8", "Computer", "Cybersecurity", "Cyber Crimes and Safety Measures", "https://www.youtube.com/watch?v=inWWhr5tnEA"),
+            Resource("R115", "Class 8", "Computer", "HTML", "HTML Tags for Line Breaks and Paragraphs", "https://www.youtube.com/watch?v=UB1O30fR-EE"),
+            Resource("R116", "Class 8", "SST", "Civics", "Indian Parliament & Law Making Process", "https://www.youtube.com/watch?v=83x5_3E1vX8"),
+            Resource("R117", "Class 8", "SST", "Geography", "Types of Natural Resources", "https://www.youtube.com/watch?v=v3v4R74D3pI"),
+            Resource("R118", "Class 8", "SST", "History", "Revolt of 1857: Causes and Impact", "https://www.youtube.com/watch?v=48S-1j5Y3C8"),
+
+            # Class 9
+            Resource("R119", "Class 9", "Mathematics", "Polynomials", "Degree and Zeroes of Polynomials", "https://www.youtube.com/watch?v=ffLL4T_sT30"),
+            Resource("R120", "Class 9", "Mathematics", "Coordinate Geo", "Cartesian System and Axes Plotting", "https://www.youtube.com/watch?v=1O_O_n_W2-0"),
+            Resource("R121", "Class 9", "Mathematics", "Geometry", "Heron's Formula for Area of Triangles", "https://www.youtube.com/watch?v=3-M98_S2Yk0"),
+            Resource("R122", "Class 9", "Science", "Motion", "Equations of Motion & Acceleration Crash Course", "https://www.youtube.com/watch?v=ZM8ECpBuQYE"),
+            Resource("R123", "Class 9", "Science", "Atoms", "Valency and Chemical Formula Derivation", "https://www.youtube.com/watch?v=9B_n_S2W3_A"),
+            Resource("R124", "Class 9", "Science", "Tissues", "Plant and Animal Tissues Detailed Overview", "https://www.youtube.com/watch?v=3M_k-K5Y84U"),
+            Resource("R125", "Class 9", "English", "Modals", "Expressing Compulsion using Must & Ought to", "https://www.youtube.com/watch?v=Nk_D_eM0M_s"),
+            Resource("R126", "Class 9", "English", "Grammar", "Subject-Verb Agreement Masterclass", "https://www.youtube.com/watch?v=L_n3_S4_m8w"),
+            Resource("R127", "Class 9", "English", "Clauses", "Adverbial and Relative Clauses", "https://www.youtube.com/watch?v=3x_8m_K2L_o"),
+            Resource("R128", "Class 9", "Computer", "Python", "Python Data Structures: Lists vs Tuples", "https://www.youtube.com/watch?v=W8KRzm-HUcc"),
+            Resource("R129", "Class 9", "Computer", "Logic Gates", "AND, OR, NOT, NAND Logic Gates Truth Tables", "https://www.youtube.com/watch?v=gI-qXk7XojA"),
+            Resource("R130", "Class 9", "Computer", "Operating Systems", "Linux vs Windows Open Source OS", "https://www.youtube.com/watch?v=vBURTt97EkA"),
+            Resource("R131", "Class 9", "SST", "Geography", "Peninsular Rivers of India & Godavari", "https://www.youtube.com/watch?v=swKBi6hHHMA"),
+            Resource("R132", "Class 9", "SST", "History", "The French Revolution of 1789", "https://www.youtube.com/watch?v=VEZqf8115xI"),
+            Resource("R133", "Class 9", "SST", "Economics", "Human Capital Formation & Education", "https://www.youtube.com/watch?v=48S-1j5Y3C8"),
+
+            # Class 10
+            Resource("R134", "Class 10", "Mathematics", "Quadratic Eq", "Quadratic Formula and Discriminant Guide", "https://www.youtube.com/watch?v=i7idZfS8t8w"),
+            Resource("R135", "Class 10", "Mathematics", "Trigonometry", "Trigonometric Ratios & Table Shortcut", "https://www.youtube.com/watch?v=pubfc132Wq4"),
+            Resource("R136", "Class 10", "Mathematics", "Arithmetic Prog", "Nth Term and Sum of AP Series", "https://www.youtube.com/watch?v=7_M-0Vn1A2Y"),
+            Resource("R137", "Class 10", "Science", "Light", "Ray Diagrams for Concave & Convex Lenses", "https://www.youtube.com/watch?v=S34_N2L3fO8"),
+            Resource("R138", "Class 10", "Science", "Electricity", "Ohm's Law and Electric Current Units", "https://www.youtube.com/watch?v=3yY5p3M98_0"),
+            Resource("R139", "Class 10", "Science", "Chemistry", "pH Scale, Acids, Bases & Salts Class 10", "https://www.youtube.com/watch?v=3A5z1C-Z8wY"),
+            Resource("R140", "Class 10", "English", "Reported Speech", "Reported Speech Rules and Examples", "https://www.youtube.com/watch?v=13Y1G8M_21Y"),
+            Resource("R141", "Class 10", "English", "Clauses", "Adjective Clauses & Relative Pronouns", "https://www.youtube.com/watch?v=3x_8m_K2L_o"),
+            Resource("R142", "Class 10", "English", "Literature", "A Letter to God Summary & Analysis", "https://www.youtube.com/watch?v=S38m9-K2L0o"),
+            Resource("R143", "Class 10", "Computer", "Web Basics", "HTML Anchor Tags and Hyperlinks", "https://www.youtube.com/watch?v=UB1O30fR-EE"),
+            Resource("R144", "Class 10", "Computer", "DBMS", "Primary Keys & Database Normalization", "https://www.youtube.com/watch?v=3EJI_d8a4X8"),
+            Resource("R145", "Class 10", "Computer", "Networking", "HTTPS and Network Security Protocols", "https://www.youtube.com/watch?v=inWWhr5tnEA"),
+            Resource("R146", "Class 10", "SST", "Economics", "Money and Credit: Reserve Bank of India", "https://www.youtube.com/watch?v=48S-1j5Y3C8"),
+            Resource("R147", "Class 10", "SST", "Civics", "Federalism in India: Central vs State Powers", "https://www.youtube.com/watch?v=7c8M9eX2W1Q"),
+            Resource("R148", "Class 10", "SST", "History", "Non-Cooperation Movement & Salt March 1930", "https://www.youtube.com/watch?v=VEZqf8115xI")
+        ])
+
+    def _seed_sample_students(self):
+        """Seeds 3-4 sample student records containing specific names (Aditya, Avinash, Priya, Aarti) for every class (1 to 10)."""
+        names_pool = ["Aditya", "Avinash", "Priya", "Aarti"]
+        
+        for c_num in range(1, 11):
+            cls_name = f"Class {c_num}"
+            
+            # Retrieve available questions for this class to construct valid assessment records
+            cls_questions = self.get_questions_for_class(cls_name)
+            if not cls_questions:
+                continue
+
+            # Map questions by topic
+            topic_map = {}
+            for q in cls_questions:
+                key = (q.subject, q.topic)
+                if key not in topic_map:
+                    topic_map[key] = 0
+                topic_map[key] += 1
+
+            topics = list(topic_map.keys())
+
+            # Seed student 1: Aditya (Weak in 1st topic)
+            st1 = Student(f"Aditya", cls_name)
+            for idx, (subj, top) in enumerate(topics):
+                max_m = topic_map[(subj, top)]
+                scored = 0 if idx == 0 else max_m # Guaranteed weak topic
+                st1.add_assessment(Assessment(subj, top, max_m, scored))
+            self.students.append(st1)
+
+            # Seed student 2: Avinash (Weak in 2nd topic)
+            st2 = Student(f"Avinash", cls_name)
+            for idx, (subj, top) in enumerate(topics):
+                max_m = topic_map[(subj, top)]
+                scored = 0 if idx == 1 else max_m # Guaranteed weak topic
+                st2.add_assessment(Assessment(subj, top, max_m, scored))
+            self.students.append(st2)
+
+            # Seed student 3: Priya (Weak in 3rd topic)
+            st3 = Student(f"Priya", cls_name)
+            for idx, (subj, top) in enumerate(topics):
+                max_m = topic_map[(subj, top)]
+                scored = 0 if idx == 2 else max_m # Guaranteed weak topic
+                st3.add_assessment(Assessment(subj, top, max_m, scored))
+            self.students.append(st3)
+
+            # Seed student 4: Aarti (Weak in 4th topic if available, else 1st)
+            st4 = Student(f"Aarti", cls_name)
+            target_weak_idx = 3 if len(topics) > 3 else 0
+            for idx, (subj, top) in enumerate(topics):
+                max_m = topic_map[(subj, top)]
+                scored = 0 if idx == target_weak_idx else max_m
+                st4.add_assessment(Assessment(subj, top, max_m, scored))
+            self.students.append(st4)
+
+    def get_questions_for_class(self, student_class: str) -> List[Question]:
+        return [q for q in self.questions if q.target_class == student_class]
+
+    def get_recommendations(self, student_class: str, weak_topics: List[tuple]) -> List[Resource]:
+        recommended = []
+        for subj, topic, _ in weak_topics:
+            found = False
+            for res in self.resources:
+                if res.target_class == student_class and res.subject == subj and res.topic == topic:
+                    recommended.append(res)
+                    found = True
+            # Fallback matching: if class-level match isn't present, match on subject + topic
+            if not found:
+                for res in self.resources:
+                    if res.subject == subj and res.topic == topic:
+                        recommended.append(res)
+        return recommended
+
+    def get_class_analytics(self, target_class: str):
+        """Calculates statistics for a specific selected class grade."""
+        class_students = [s for s in self.students if s.student_class == target_class]
+        if not class_students:
+            return 0.0, [], 0
+
+        total_pct_sum = sum(s.get_overall_percentage() for s in class_students)
+        avg_class_pct = total_pct_sum / len(class_students)
+
+        weak_topic_counts = {}
+        for s in class_students:
+            _, weak = s.get_topic_breakdown()
+            for subj, topic, _ in weak:
+                key = f"{subj}: {topic}"
+                weak_topic_counts[key] = weak_topic_counts.get(key, 0) + 1
+
+        sorted_weak = sorted(weak_topic_counts.items(), key=lambda x: x[1], reverse=True)
+        return avg_class_pct, sorted_weak, len(class_students)
+
+
+# ==========================================
+# 3. MULTICOLOR INTERACTIVE TKINTER GUI
+# ==========================================
+
+class Learn4AllApp:
+    def __init__(self, root: tk.Tk, engine: Learn4AllEngine):
+        self.root = root
+        self.engine = engine
+        self.root.title("Learn4All - 15-Question Assessment Engine")
+        self.root.geometry("920x760")
+        self.root.configure(bg="#0F172A")
+
+        # App State
+        self.current_student: Student = None
+        self.active_questions: List[Question] = []
+        self.current_q_index = 0
+        self.user_answers = {}
+        self.selected_option_var = tk.IntVar(value=-1)
+        self.option_buttons = []
+
+        # Color Palette
+        self.C_DARK = "#0F172A"
+        self.C_CARD = "#1E293B"
+        self.C_PURPLE = "#8B5CF6"
+        self.C_CYAN = "#06B6D4"
+        self.C_GREEN = "#10B981"
+        self.C_RED = "#EF4444"
+        self.C_AMBER = "#F59E0B"
+        self.C_TEXT = "#F8FAFC"
+        self.C_MUTED = "#94A3B8"
+
+        # Application Top Header
+        self.header_frame = tk.Frame(self.root, bg=self.C_PURPLE, height=65)
+        self.header_frame.pack(fill=tk.X)
+
+        header_lbl = tk.Label(
+            self.header_frame, 
+            text="★ LEARN4ALL: 15-QUESTION CLASS ASSESSMENT SYSTEM ★", 
+            font=("Segoe UI", 15, "bold"), 
+            fg="#FFFFFF", 
+            bg=self.C_PURPLE, 
+            pady=16
+        )
+        header_lbl.pack()
+
+        self.main_container = tk.Frame(self.root, bg=self.C_DARK)
+        self.main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        self.show_registration_screen()
+
+    def clear_container(self):
+        for widget in self.main_container.winfo_children():
+            widget.destroy()
+
+    # ------------------------------------------
+    # SCREEN 1: REGISTRATION
+    # ------------------------------------------
+    def show_registration_screen(self):
+        self.clear_container()
+
+        card = tk.Frame(self.main_container, bg=self.C_CARD, bd=2, relief=tk.RAISED, padx=40, pady=35)
+        card.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+
+        tk.Label(card, text="🚀 WELCOME LEARNER", font=("Segoe UI", 16, "bold"), bg=self.C_CARD, fg=self.C_CYAN).grid(row=0, column=0, columnspan=2, pady=(0, 20))
+
+        tk.Label(card, text="Your Name:", font=("Segoe UI", 11, "bold"), bg=self.C_CARD, fg=self.C_TEXT).grid(row=1, column=0, sticky=tk.W, pady=12)
+        name_entry = tk.Entry(card, width=24, font=("Segoe UI", 11), bg="#334155", fg="#FFFFFF", insertbackground="white", bd=1, relief=tk.FLAT)
+        name_entry.grid(row=1, column=1, pady=12, padx=10)
+
+        tk.Label(card, text="Select Class:", font=("Segoe UI", 11, "bold"), bg=self.C_CARD, fg=self.C_TEXT).grid(row=2, column=0, sticky=tk.W, pady=12)
+        
+        classes_list = [f"Class {i}" for i in range(1, 11)]
+        class_cb = ttk.Combobox(card, values=classes_list, state="readonly", width=22, font=("Segoe UI", 11))
+        class_cb.current(9) # Default selection set to Class 10
+        class_cb.grid(row=2, column=1, pady=12, padx=10)
+
+        def start_quiz():
+            name = name_entry.get().strip()
+            selected_class = class_cb.get()
+
+            if not name:
+                messagebox.showwarning("Required Input", "Please enter your name to unlock the quiz.")
+                return
+
+            self.current_student = Student(name, selected_class)
+            self.engine.students.append(self.current_student)
+            
+            self.active_questions = self.engine.get_questions_for_class(selected_class)
+            self.current_q_index = 0
+            self.user_answers = {}
+            self.show_quiz_screen()
+
+        start_btn = tk.Button(
+            card, 
+            text="START 15-QUESTION QUIZ ▶", 
+            command=start_quiz, 
+            bg=self.C_GREEN, 
+            fg="white", 
+            font=("Segoe UI", 11, "bold"), 
+            activebackground="#059669", 
+            activeforeground="white", 
+            relief=tk.FLAT, 
+            padx=20, 
+            pady=10, 
+            cursor="hand2"
+        )
+        start_btn.grid(row=3, column=0, columnspan=2, pady=(25, 0))
+
+    # ------------------------------------------
+    # SCREEN 2: MULTICOLOR INTERACTIVE QUIZ
+    # ------------------------------------------
+    def show_quiz_screen(self):
+        self.clear_container()
+        q = self.active_questions[self.current_q_index]
+
+        # Top Information Bar
+        top_bar = tk.Frame(self.main_container, bg=self.C_DARK)
+        top_bar.pack(fill=tk.X, pady=(0, 10))
+
+        q_counter = tk.Label(
+            top_bar, 
+            text=f"Question {self.current_q_index + 1} of {len(self.active_questions)} [{self.current_student.student_class}]", 
+            font=("Segoe UI", 11, "bold"), 
+            bg=self.C_DARK, 
+            fg=self.C_AMBER
+        )
+        q_counter.pack(side=tk.LEFT)
+
+        subj_tag = tk.Label(
+            top_bar, 
+            text=f"{q.subject} ➔ {q.topic}", 
+            font=("Segoe UI", 10, "bold"), 
+            bg=self.C_CYAN, 
+            fg="#0F172A", 
+            padx=12, 
+            pady=4
+        )
+        subj_tag.pack(side=tk.RIGHT)
+
+        # Progress Meter Bar
+        progress_frame = tk.Frame(self.main_container, bg="#334155", height=10)
+        progress_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        fill_width = int(((self.current_q_index + 1) / len(self.active_questions)) * 880)
+        fill_bar = tk.Frame(progress_frame, bg=self.C_GREEN, height=10, width=fill_width)
+        fill_bar.pack(side=tk.LEFT)
+
+        # Interactive Question Display Card
+        card = tk.Frame(self.main_container, bg=self.C_CARD, bd=1, relief=tk.RAISED, padx=25, pady=25)
+        card.pack(fill=tk.BOTH, expand=True)
+
+        q_label = tk.Label(card, text=q.text, font=("Segoe UI", 13, "bold"), bg=self.C_CARD, fg=self.C_TEXT, wraplength=820, justify=tk.LEFT)
+        q_label.pack(anchor=tk.W, pady=(0, 20))
+
+        # Dynamic Color Option Buttons
+        self.selected_option_var.set(self.user_answers.get(q.q_id, -1))
+        self.option_buttons = []
+
+        for idx, option in enumerate(q.options):
+            btn_color = "#334155"
+            text_color = self.C_TEXT
+
+            if self.user_answers.get(q.q_id) == idx:
+                btn_color = self.C_PURPLE
+                text_color = "#FFFFFF"
+
+            btn = tk.Button(
+                card, 
+                text=f" {chr(65+idx)}. {option}", 
+                font=("Segoe UI", 11, "bold"), 
+                bg=btn_color, 
+                fg=text_color, 
+                activebackground=self.C_PURPLE, 
+                activeforeground="#FFFFFF", 
+                anchor=tk.W, 
+                relief=tk.FLAT, 
+                padx=15, 
+                pady=10, 
+                cursor="hand2", 
+                command=lambda opt_idx=idx: self.select_option(opt_idx)
+            )
+            btn.pack(fill=tk.X, pady=6)
+            self.option_buttons.append(btn)
+
+        # Bottom Control Navigation Buttons
+        btn_frame = tk.Frame(self.main_container, bg=self.C_DARK)
+        btn_frame.pack(fill=tk.X, pady=(15, 0))
+
+        if self.current_q_index > 0:
+            prev_btn = tk.Button(btn_frame, text="◄ PREVIOUS", command=self.prev_question, bg="#475569", fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT, padx=18, pady=8, cursor="hand2")
+            prev_btn.pack(side=tk.LEFT)
+
+        if self.current_q_index < len(self.active_questions) - 1:
+            next_btn = tk.Button(btn_frame, text="NEXT ►", command=self.next_question, bg=self.C_CYAN, fg="#0F172A", font=("Segoe UI", 10, "bold"), relief=tk.FLAT, padx=22, pady=8, cursor="hand2")
+            next_btn.pack(side=tk.RIGHT)
+        else:
+            submit_btn = tk.Button(btn_frame, text="SUBMIT & VIEW REPORT ➔", command=self.evaluate_and_show_report, bg=self.C_GREEN, fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT, padx=22, pady=8, cursor="hand2")
+            submit_btn.pack(side=tk.RIGHT)
+
+    def select_option(self, idx: int):
+        q = self.active_questions[self.current_q_index]
+        self.user_answers[q.q_id] = idx
+        self.selected_option_var.set(idx)
+
+        for btn_idx, btn in enumerate(self.option_buttons):
+            if btn_idx == idx:
+                btn.config(bg=self.C_PURPLE, fg="#FFFFFF")
+            else:
+                btn.config(bg="#334155", fg=self.C_TEXT)
+
+    def next_question(self):
+        self.current_q_index += 1
+        self.show_quiz_screen()
+
+    def prev_question(self):
+        self.current_q_index -= 1
+        self.show_quiz_screen()
+
+    # ------------------------------------------
+    # EVALUATION & DUAL-REPORT TAB VIEW
+    # ------------------------------------------
+    def evaluate_and_show_report(self):
+        topic_scores = {}
+
+        for q in self.active_questions:
+            key = (q.subject, q.topic)
+            if key not in topic_scores:
+                topic_scores[key] = {'scored': 0, 'max': 0}
+            
+            topic_scores[key]['max'] += 1
+            if self.user_answers.get(q.q_id) == q.correct_idx:
+                topic_scores[key]['scored'] += 1
+
+        self.current_student.clear_assessments()
+        for (subj, topic), data in topic_scores.items():
+            asm = Assessment(subj, topic, data['max'], data['scored'])
+            self.current_student.add_assessment(asm)
+
+        self.show_reports_view()
+
+    def show_reports_view(self):
+        self.clear_container()
+
+        # Notebook Control for Individual vs Class Reports
+        notebook = ttk.Notebook(self.main_container)
+        notebook.pack(fill=tk.BOTH, expand=True)
+
+        # Tab 1 Frame: Individual Student Report
+        tab_student = tk.Frame(notebook, bg=self.C_DARK)
+        notebook.add(tab_student, text=" 👤 My Individual Report ")
+
+        # Tab 2 Frame: Class-Wide Report (Renamed for Teachers Only)
+        tab_class = tk.Frame(notebook, bg=self.C_DARK)
+        notebook.add(tab_class, text=" 📊 Class Report (For Teachers Only) ")
+
+        self._build_student_report_tab(tab_student)
+        self._build_class_report_tab(tab_class)
+
+    def _build_student_report_tab(self, parent_frame):
+        strong_topics, weak_topics = self.current_student.get_topic_breakdown()
+        recommendations = self.engine.get_recommendations(self.current_student.student_class, weak_topics)
+
+        total_max = self.current_student.get_total_max()
+        total_scored = self.current_student.get_total_scored()
+        overall_pct = self.current_student.get_overall_percentage()
+
+        # Top Summary Header
+        summary_frame = tk.Frame(parent_frame, bg=self.C_DARK)
+        summary_frame.pack(fill=tk.X, pady=(10, 15))
+
+        # Student Details Card
+        c1 = tk.Frame(summary_frame, bg=self.C_CARD, bd=1, relief=tk.RAISED, padx=20, pady=15)
+        c1.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
+        tk.Label(c1, text="STUDENT PROFILE", font=("Segoe UI", 9, "bold"), fg=self.C_MUTED, bg=self.C_CARD).pack(anchor=tk.W)
+        tk.Label(c1, text=f"{self.current_student.name}", font=("Segoe UI", 14, "bold"), fg=self.C_CYAN, bg=self.C_CARD).pack(anchor=tk.W)
+        tk.Label(c1, text=f"Target Level: {self.current_student.student_class}", font=("Segoe UI", 10, "bold"), fg=self.C_AMBER, bg=self.C_CARD).pack(anchor=tk.W)
+
+        # Score Badge Card
+        c2 = tk.Frame(summary_frame, bg=self.C_CARD, bd=1, relief=tk.RAISED, padx=20, pady=15)
+        c2.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=8)
+        tk.Label(c2, text="FINAL SCORE (15 QUESTIONS)", font=("Segoe UI", 9, "bold"), fg=self.C_MUTED, bg=self.C_CARD).pack(anchor=tk.W)
+        
+        badge_color = self.C_GREEN if overall_pct >= 60 else self.C_RED
+        tk.Label(c2, text=f"{overall_pct:.1f}%", font=("Segoe UI", 18, "bold"), fg=badge_color, bg=self.C_CARD).pack(anchor=tk.W)
+        tk.Label(c2, text=f"{total_scored} / {total_max} Questions Correct", font=("Segoe UI", 10), fg=self.C_TEXT, bg=self.C_CARD).pack(anchor=tk.W)
+
+        # Scrollable Frame Canvas
+        canvas = tk.Canvas(parent_frame, bg=self.C_DARK, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(parent_frame, orient=tk.VERTICAL, command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=self.C_DARK)
+
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Breakdown Table Section
+        sec1_title = tk.Label(scrollable_frame, text="Subject & Topic Performance Breakdown", font=("Segoe UI", 11, "bold"), bg=self.C_DARK, fg=self.C_TEXT)
+        sec1_title.pack(anchor=tk.W, pady=(5, 8))
+
+        tree_frame = tk.Frame(scrollable_frame, bg=self.C_CARD)
+        tree_frame.pack(fill=tk.X, pady=(0, 15))
+
+        columns = ("Subject", "Topic", "Score", "Percentage", "Status")
+        tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=5)
+
+        for col in columns:
+            tree.heading(col, text=col)
+            tree.column(col, width=150, anchor=tk.CENTER)
+
+        for asm in self.current_student.assessments:
+            pct = asm.get_percentage()
+            status = "STRONG" if pct >= 60.0 else "NEEDS REVIEW"
+            tree.insert("", tk.END, values=(asm.subject, asm.topic, f"{asm.scored_marks}/{asm.max_marks}", f"{pct:.1f}%", status))
+
+        tree.pack(fill=tk.X)
+
+        # Recommended Materials
+        sec2_title = tk.Label(scrollable_frame, text=f"Recommended Study Materials ({self.current_student.student_class})", font=("Segoe UI", 11, "bold"), bg=self.C_DARK, fg=self.C_TEXT)
+        sec2_title.pack(anchor=tk.W, pady=(5, 8))
+
+        rec_card = tk.Frame(scrollable_frame, bg=self.C_CARD, bd=1, relief=tk.RAISED, padx=15, pady=15)
+        rec_card.pack(fill=tk.X, pady=(0, 15))
+
+        if recommendations:
+            for r in recommendations:
+                card_btn = tk.Button(
+                    rec_card,
+                    text=f"📌 {r.title}\n Subject: {r.subject} | Topic: {r.topic}\n ▶ Click here to open video / study guide in browser",
+                    font=("Segoe UI", 10, "bold"),
+                    fg=self.C_CYAN,
+                    bg="#334155",
+                    activebackground="#475569",
+                    activeforeground="#38BDF8",
+                    justify=tk.LEFT,
+                    anchor="w",
+                    bd=1,
+                    relief=tk.RAISED,
+                    padx=12,
+                    pady=8,
+                    cursor="hand2",
+                    command=lambda target_url=r.url: webbrowser.open(target_url)
+                )
+                card_btn.pack(fill=tk.X, pady=4)
+        else:
+            msg = "🌟 Excellent score! No revision materials needed for this level." if not weak_topics else "No targeted study material found for weak areas."
+            tk.Label(rec_card, text=msg, font=("Segoe UI", 10, "italic"), fg=self.C_MUTED, bg=self.C_CARD).pack(anchor=tk.W)
+
+        # Restart Button
+        restart_btn = tk.Button(scrollable_frame, text="↺ RETAKE OR SWITCH CLASS", command=self.show_registration_screen, bg=self.C_PURPLE, fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT, padx=16, pady=8, cursor="hand2")
+        restart_btn.pack(anchor=tk.W, pady=10)
+
+    def _build_class_report_tab(self, parent_frame):
+        """Constructs class-wide analytics overview filtered by students of the selected class."""
+        filter_bar = tk.Frame(parent_frame, bg=self.C_DARK)
+        filter_bar.pack(fill=tk.X, pady=(10, 10))
+
+        tk.Label(filter_bar, text="Filter Class Level:", font=("Segoe UI", 10, "bold"), bg=self.C_DARK, fg=self.C_TEXT).pack(side=tk.LEFT, padx=(0, 10))
+        
+        classes_list = [f"Class {i}" for i in range(1, 11)]
+        class_filter_cb = ttk.Combobox(filter_bar, values=classes_list, state="readonly", width=15, font=("Segoe UI", 10))
+        
+        # Default filter to current student's class
+        current_cls = self.current_student.student_class if self.current_student else "Class 10"
+        class_filter_cb.set(current_cls)
+        class_filter_cb.pack(side=tk.LEFT)
+
+        # Dynamic Content Container Frame
+        content_container = tk.Frame(parent_frame, bg=self.C_DARK)
+        content_container.pack(fill=tk.BOTH, expand=True)
+
+        def refresh_class_data(event=None):
+            for widget in content_container.winfo_children():
+                widget.destroy()
+
+            selected_cls = class_filter_cb.get()
+            avg_pct, top_weak, total_students = self.engine.get_class_analytics(selected_cls)
+
+            # Top Summary Statistics Cards
+            stats_frame = tk.Frame(content_container, bg=self.C_DARK)
+            stats_frame.pack(fill=tk.X, pady=(0, 15))
+
+            k1 = tk.Frame(stats_frame, bg=self.C_CARD, bd=1, relief=tk.RAISED, padx=15, pady=12)
+            k1.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 6))
+            tk.Label(k1, text=f"STUDENTS IN {selected_cls.upper()}", font=("Segoe UI", 8, "bold"), fg=self.C_MUTED, bg=self.C_CARD).pack(anchor=tk.W)
+            tk.Label(k1, text=f"{total_students}", font=("Segoe UI", 16, "bold"), fg=self.C_CYAN, bg=self.C_CARD).pack(anchor=tk.W)
+
+            k2 = tk.Frame(stats_frame, bg=self.C_CARD, bd=1, relief=tk.RAISED, padx=15, pady=12)
+            k2.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=6)
+            tk.Label(k2, text="CLASS AVG SCORE", font=("Segoe UI", 8, "bold"), fg=self.C_MUTED, bg=self.C_CARD).pack(anchor=tk.W)
+            tk.Label(k2, text=f"{avg_pct:.1f}%", font=("Segoe UI", 16, "bold"), fg=self.C_AMBER, bg=self.C_CARD).pack(anchor=tk.W)
+
+            k3 = tk.Frame(stats_frame, bg=self.C_CARD, bd=1, relief=tk.RAISED, padx=15, pady=12)
+            k3.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(6, 0))
+            top_weak_str = top_weak[0][0] if top_weak else "None"
+            tk.Label(k3, text="COMMON WEAK TOPIC", font=("Segoe UI", 8, "bold"), fg=self.C_MUTED, bg=self.C_CARD).pack(anchor=tk.W)
+            tk.Label(k3, text=top_weak_str, font=("Segoe UI", 10, "bold"), fg=self.C_RED, bg=self.C_CARD).pack(anchor=tk.W)
+
+            # Table for Same Class Students
+            tbl_lbl = tk.Label(content_container, text=f"Teacher Analytics Record - {selected_cls}", font=("Segoe UI", 11, "bold"), bg=self.C_DARK, fg=self.C_TEXT)
+            tbl_lbl.pack(anchor=tk.W, pady=(5, 8))
+
+            tbl_frame = tk.Frame(content_container, bg=self.C_CARD)
+            tbl_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+            cols = ("Name", "Class Level", "Overall Score", "Weak Topics Identified")
+            class_tree = ttk.Treeview(tbl_frame, columns=cols, show="headings", height=7)
+
+            for c in cols:
+                class_tree.heading(c, text=c)
+
+            class_tree.column("Name", width=160, anchor=tk.W)
+            class_tree.column("Class Level", width=100, anchor=tk.CENTER)
+            class_tree.column("Overall Score", width=120, anchor=tk.CENTER)
+            class_tree.column("Weak Topics Identified", width=420, anchor=tk.W)
+
+            # Populate table only with students of the selected class
+            same_class_students = [s for s in self.engine.students if s.student_class == selected_cls]
+
+            for st in same_class_students:
+                pct = st.get_overall_percentage()
+                _, weak_list = st.get_topic_breakdown()
+                weak_str = ", ".join([f"{subj}: {topic}" for subj, topic, _ in weak_list]) if weak_list else "None (Mastered)"
+                class_tree.insert("", tk.END, values=(st.name, st.student_class, f"{pct:.1f}%", weak_str))
+
+            class_tree.pack(fill=tk.BOTH, expand=True)
+
+        class_filter_cb.bind("<<ComboboxSelected>>", refresh_class_data)
+        refresh_class_data()
+
+
+# ==========================================
+# 4. MAIN ENTRY POINT
+# ==========================================
+
+if __name__ == "__main__":
+    engine = Learn4AllEngine()
+    root = tk.Tk()
+    app = Learn4AllApp(root, engine)
+    root.mainloop()
+
